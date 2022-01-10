@@ -1,2 +1,4 @@
-for very first commit...readme.md
-
+<list of files>
+-source codes
+	-kernel.cu
+	
