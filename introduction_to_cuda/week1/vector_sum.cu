@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#define NUM_DATA 1025 //10240 makes incorrect results in Kernel computatio ==> why?
+#define NUM_DATA 1025 //large number (more than 1024) makes incorrect results in Kernel computation
 
 __global__ void vecAdd(int* _a, int* _b, int* _c){
 	int tID = threadIdx.x;
