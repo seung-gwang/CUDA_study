@@ -6,16 +6,20 @@
 #include <string.h>
 #include <time.h>
 
-#define NUM_DATA 1025 //10240 makes incorrect results in Kernel computatio ==> why?
-
+#define NUM_DATA 65536 //
+#define GRID_NUM 64// Make grid that has dimension of (GRID_NUM,1,1)
 __global__ void vecAdd(int* _a, int* _b, int* _c){
-	int tID = threadIdx.x;
+	//1)find the block 2)find the thread within the block
+	int tID =(blockIdx.x * blockDim.x) +  threadIdx.x;
 	_c[tID] = _a[tID] + _b[tID];
 }
 
 int main(void){
 	int *a, *b, *c, *host_c;
 	int *d_a, *d_b, *d_c;
+	
+	double hostTime = 0.0;
+	double deviceTime = 0.0;
 
 	int memSize = sizeof(int)*NUM_DATA;
 
@@ -40,12 +44,19 @@ int main(void){
 	cudaMemcpy(d_a, a, memSize, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_b, b, memSize, cudaMemcpyHostToDevice);
 	clock_t et = clock();
+	deviceTime += (double)(et-st)/CLOCKS_PER_SEC;
 	printf("Data Transfer Overhead 1 - Host to Device : %f seconds\n", (double)(et - st)/CLOCKS_PER_SEC);
-
+	
+	
+	dim3 grid(GRID_NUM);// GRID : (GRID_NUM,1,1)
+	dim3 block(NUM_DATA / GRID_NUM);//NUM_DATA / GRID_NUM == "NUMBER OF THREADS" ... should be <= 1024 
+	
 	//computation on Device
 	st = clock();
-	vecAdd<<<1, NUM_DATA>>>(d_a, d_b, d_c);
-	et = clock();	
+	//vecAdd<<<1, NUM_DATA>>>(d_a, d_b, d_c);
+	vecAdd<<<grid, block>>>(d_a, d_b, d_c);
+	et = clock();
+	deviceTime += (double)(et-st)/CLOCKS_PER_SEC;	
 	printf("Vector Summation Kernel computation : %f seconds\n",(double)(et - st)/CLOCKS_PER_SEC);
 	
 	//computation on Host
@@ -53,6 +64,7 @@ int main(void){
 	for(int i = 0; i < NUM_DATA; i++)
 		host_c[i] = a[i] + b[i];
 	et = clock();
+	hostTime += (double)(et-st)/CLOCKS_PER_SEC;
 	printf("Vector Summation Host computation : %f seconds\n", (double)(et - st)/CLOCKS_PER_SEC);
 
 
@@ -61,9 +73,14 @@ int main(void){
 	st = clock();
 	cudaMemcpy(c, d_c, memSize, cudaMemcpyDeviceToHost);
 	et = clock();
+	deviceTime += (double)(et-st)/CLOCKS_PER_SEC;
 	printf("Data Transfer Overhead 2 - Device to Host : %f seconds\n", (double)(et - st)/CLOCKS_PER_SEC);
 	
 	//check results
+	printf("**********RESULT**********\n");
+	
+	printf("grid dimension : (%d,%d,%d)\n", grid.x, grid.y, grid.z);
+	printf("block dimension : (%d,%d,%d)\n", block.x, block.y, block.z);
 	bool result = true;
 	for (int i = 0; i < NUM_DATA; i++){
 		if(a[i] + b[i] != c[i]){
@@ -73,8 +90,12 @@ int main(void){
 	}
 
 	if(result)
-		printf("GPU works well!\n");
-
+		printf("Calculated Correctly! GPU works well!\n");
+	printf("Total Device Time: %f\n", deviceTime);
+	printf("Total Host Time: %f\n", hostTime);
+	if (deviceTime - hostTime < 0.0)
+		printf("Using GPU made the calculation faster\n");
+	
 	cudaFree(d_a);
 	cudaFree(d_b);
 	cudaFree(d_c);
